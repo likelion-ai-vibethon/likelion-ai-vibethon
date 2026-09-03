@@ -60,10 +60,13 @@ export async function rewriteResume({ resume, jd, highlight }) {
   try {
     rawText = await callGemini(prompt)
     return JSON.parse(rawText)
-  } catch {
+  } catch (err) {
+    console.error('[gemini] 1차 호출/파싱 실패:', err.message)
     try {
       return JSON.parse(stripCodeFence(rawText))
-    } catch {
+    } catch (err2) {
+      console.error('[gemini] 코드펜스 제거 후 재파싱도 실패:', err2.message)
+      if (rawText) console.error('[gemini] 원본 응답 텍스트:', rawText)
       return {
         keywords: [],
         talent_profile: '',
