@@ -1,0 +1,10 @@
+{
+  "description": "This web app enables users to create tailored resumes by inputting personal details and job descriptions, leveraging AI for personalized feedback and enhancements.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
