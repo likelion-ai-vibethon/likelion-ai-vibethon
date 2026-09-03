@@ -1,8 +1,10 @@
-export async function analyzeResume(resume, jd) {
-  const res = await fetch('/api/analyze', {
+const API_BASE = import.meta.env.VITE_API_BASE || ''
+
+export async function rewriteResume({ resume, jd, emphasis }) {
+  const res = await fetch(`${API_BASE}/api/rewrite`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ resume, jd }),
+    body: JSON.stringify({ resume, jd, emphasis }),
   })
 
   if (!res.ok) {

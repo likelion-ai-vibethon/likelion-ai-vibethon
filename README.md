@@ -16,16 +16,14 @@
 
 ## ✨ 핵심 기능 (Key Features)
 
-1. 📂 **자소서 저장소 (Resume Repository)**
-   - 작성한 자소서 원문을 텍스트 형태로 저장 및 관리
-2. 🔍 **JD 키워드 추출 (JD Keyword Extraction)**
-   - 지원하려는 기업의 채용공고(JD) 텍스트를 붙여넣으면 AI가 주요 인재상 및 필수 직무 키워드 자동 추출
-3. 🤖 **AI 맞춤 첨삭 및 재구성 (AI Tailored Rewriting)**
-   - 원문 자소서와 추출된 JD 키워드를 결합하여 해당 기업에 최적화된 자소서 문장 추천
-4. 🔄 **Before & After 비교 (Visual Comparison)**
-   - 원문과 AI가 재구성한 결과물을 나란히 비교하여 한눈에 수정 내역 확인
-5. 💾 **기업별 버전 관리 (Version Control by Company)**
-   - 완성된 맞춤 자소서를 "OO기업 지원용"으로 구분하여 저장소에 보관
+1. 🔍 **JD 키워드 추출 (JD Keyword Extraction)**
+   - 채용공고(JD) 텍스트를 붙여넣으면 AI가 주요 인재상 및 필수 직무 키워드 자동 추출
+2. 🤖 **AI 맞춤 첨삭 및 재구성 (AI Tailored Rewriting)**
+   - 원문 자소서 + JD 키워드 + (선택) 강조하고 싶은 경험을 결합해 해당 기업에 최적화된 자소서 재구성
+3. 🔄 **Before & After 비교 (Visual Comparison)**
+   - 원문(읽기 전용)과 AI가 재구성한 결과물(직접 수정 가능)을 나란히 비교
+
+> 오늘 MVP 범위: 로그인/저장 기능 없음. 모든 상태는 프론트 state로만 관리하며, 새로고침 시 초기화됩니다.
 
 ---
 
@@ -34,9 +32,11 @@
 - **Frontend:** React + Vite (`frontend/`)
 - **Backend:** Node.js + Express (`backend/`) — Gemini API 키를 서버에서만 보관하는 프록시 역할
 - **AI Engine:** Google Gemini API (무료 티어)
-- **Storage:** LocalStorage (빠르고 효율적인 MVP 시연용 데이터 관리)
-- **Deployment:** Vercel
+- **Storage:** 없음 — 상태는 프론트 React state로만 관리 (오늘 MVP 범위)
+- **Deployment:** 프론트엔드는 Vercel, 백엔드는 별도 배포 또는 로컬 실행
 - **AI Assist Tools:** Claude Code, Cursor 등
+
+> 백엔드는 기존에 구축된 Node.js/Express를 그대로 사용합니다 (FastAPI 재작성은 오늘 일정상 보류).
 
 ---
 
@@ -60,13 +60,41 @@ npm run dev
 
 ---
 
+## ☁️ Vercel 배포 (프론트엔드)
+
+1. Vercel 대시보드 → New Project → 이 저장소 선택 (조직 저장소 연동이 안 되면 본인 계정으로 fork 후 진행)
+2. **Root Directory**를 `frontend`로 지정
+3. 백엔드를 별도로 배포했다면, 프로젝트 환경변수에 `VITE_API_BASE=<배포된 백엔드 URL>` 추가
+   - 백엔드를 배포하지 않고 로컬로 데모한다면 `VITE_API_BASE`를 로컬 백엔드가 접근 가능한 주소(터널링 등)로 설정
+4. Deploy
+
+백엔드(Express)는 Render/Railway 등에 배포하거나, 시간이 없으면 로컬에서 `npm run dev --prefix backend`로 띄우고 데모해도 무방합니다. 이 경우 백엔드 `.env`의 `FRONTEND_ORIGIN`에 배포된 프론트 도메인을 추가해야 CORS가 통과합니다.
+
+---
+
+## 🖥 화면 구성 (Screens)
+
+1. **랜딩** — 서비스 소개 + [시작하기] 버튼
+2. **입력** — 자소서 원문 / JD / 강조하고 싶은 경험(선택) 입력 → [AI 첨삭]
+3. **결과** — 추출된 키워드, Before(읽기 전용) / After(수정 가능) 비교
+
 ## 🎬 시연 시나리오 (Demo Scenario)
 
-1. **저장소 확인:** 미리 작성해 둔 자소서 원문을 불러옵니다.
-2. **JD 입력:** 타겟 기업의 실제 채용공고 텍스트를 붙여넣습니다.
-3. **AI 분석 및 재구성:** `AI 첨삭` 버튼 클릭 시, JD 핵심 키워드가 추출되며 맞춤형 자소서가 생성됩니다.
-4. **비교 및 확인:** Before / After 화면을 통해 변환된 문장을 비교합니다.
-5. **저장:** 재구성된 결과를 'OO기업 지원용' 버전으로 저장합니다.
+1. **JD 입력:** 타겟 기업의 실제 채용공고 텍스트를 붙여넣습니다.
+2. **AI 분석 및 재구성:** `AI 첨삭` 버튼 클릭 시, JD 핵심 키워드가 추출되며 맞춤형 자소서가 생성됩니다.
+3. **비교 및 확인:** Before / After 화면을 통해 변환된 문장을 비교하고, After는 직접 다듬을 수 있습니다.
+
+## 🔌 백엔드 API
+
+**`POST /api/rewrite`**
+
+```json
+// Request
+{ "resume": "자소서 원문", "jd": "채용공고 텍스트", "emphasis": "강조하고 싶은 경험 (선택)" }
+
+// Response
+{ "keywords": ["키워드1", "키워드2"], "draft": "재구성된 자소서 전체 텍스트" }
+```
 
 ---
 
