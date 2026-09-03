@@ -29,7 +29,7 @@
 
 ## 🛠 기술 스택 (Tech Stack)
 
-- **Frontend:** React + Vite (`frontend/`)
+- **Frontend:** React + Vite + Tailwind (`figma-make/`)
 - **Backend:** Node.js + Express (`backend/`) — Gemini API 키를 서버에서만 보관하는 프록시 역할, 채용공고(URL) 크롤링 지원
 - **AI Engine:** Google Gemini API (무료 티어, `google-genai` SDK)
 - **Storage:** 없음 — 상태는 프론트 React state로만 관리 (오늘 MVP 범위)
@@ -57,12 +57,12 @@ npm run dev   # 파일 변경 감지 없이 바로 실행하려면: npm start
 **터미널 2 — 프론트엔드 (Vite)**
 
 ```bash
-cd frontend
+cd figma-make
 npm install
 npm run dev
 ```
 
-- 프론트엔드: http://localhost:5173
+- 프론트엔드: http://localhost:8443
 - 백엔드: http://localhost:4000 (프론트에서 `/api`로 프록시됨), 헬스체크: `GET /health`
 
 ---
@@ -70,7 +70,7 @@ npm run dev
 ## ☁️ Vercel 배포 (프론트엔드)
 
 1. Vercel 대시보드 → New Project → 이 저장소 선택 (조직 저장소 연동이 안 되면 본인 계정으로 fork 후 진행)
-2. **Root Directory**를 `frontend`로 지정
+2. **Root Directory**를 `figma-make`로 지정
 3. 백엔드를 별도로 배포했다면, 프로젝트 환경변수에 `VITE_API_BASE=<배포된 백엔드 URL>` 추가
    - 백엔드를 배포하지 않고 로컬로 데모한다면 `VITE_API_BASE`를 로컬 백엔드가 접근 가능한 주소(터널링 등)로 설정
 4. Deploy
@@ -81,9 +81,10 @@ npm run dev
 
 ## 🖥 화면 구성 (Screens)
 
-1. **랜딩** — 서비스 소개 + [시작하기] 버튼
-2. **입력** — 자소서 원문 / JD / 강조하고 싶은 경험(선택) 입력 → [AI 첨삭]
-3. **결과** — 추출된 키워드, Before(읽기 전용) / After(수정 가능) 비교
+1. **이력서 목록** — 저장된 이력서 목록 + [새 이력서 추가] (진입점, 랜딩 역할)
+2. **AI 맞춤 첨삭** — 자소서 원문 / JD / 강조하고 싶은 경험(선택) 입력 → [AI 첨삭하기]
+3. **AI 분석 결과** — 추출된 키워드, 매칭 점수, 요구 인재상 분석, Before(읽기 전용) / After(수정 가능) 비교
+4. **저장 완료** — 첨삭 결과 저장 확인
 
 ## 🎬 시연 시나리오 (Demo Scenario)
 
