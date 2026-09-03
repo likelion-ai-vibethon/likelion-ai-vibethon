@@ -30,33 +30,40 @@
 ## 🛠 기술 스택 (Tech Stack)
 
 - **Frontend:** React + Vite (`frontend/`)
-- **Backend:** Node.js + Express (`backend/`) — Gemini API 키를 서버에서만 보관하는 프록시 역할
-- **AI Engine:** Google Gemini API (무료 티어)
+- **Backend:** Python + FastAPI (`backend/`) — Gemini API 키를 서버에서만 보관하는 프록시 역할
+- **AI Engine:** Google Gemini API (무료 티어, `google-genai` SDK)
 - **Storage:** 없음 — 상태는 프론트 React state로만 관리 (오늘 MVP 범위)
 - **Deployment:** 프론트엔드는 Vercel, 백엔드는 별도 배포 또는 로컬 실행
 - **AI Assist Tools:** Claude Code, Cursor 등
-
-> 백엔드는 기존에 구축된 Node.js/Express를 그대로 사용합니다 (FastAPI 재작성은 오늘 일정상 보류).
 
 ---
 
 ## 🚀 실행 방법 (Getting Started)
 
+**터미널 1 — 백엔드 (FastAPI)**
+
 ```bash
-# 1. 의존성 설치 (루트에서 한 번에)
+cd backend
+python -m venv .venv
+.venv\Scripts\activate        # macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+
+cp .env.example .env
+# .env 에 GEMINI_API_KEY 값 채우기 (https://aistudio.google.com/apikey 에서 발급)
+
+uvicorn main:app --reload --port 4000
+```
+
+**터미널 2 — 프론트엔드 (Vite)**
+
+```bash
+cd frontend
 npm install
-npm run install:all
-
-# 2. 백엔드 환경변수 설정
-cp backend/.env.example backend/.env
-# backend/.env 에 GEMINI_API_KEY 값 채우기 (https://aistudio.google.com/apikey 에서 발급)
-
-# 3. 프론트 + 백엔드 동시 실행
 npm run dev
 ```
 
 - 프론트엔드: http://localhost:5173
-- 백엔드: http://localhost:4000 (프론트에서 `/api`로 프록시됨)
+- 백엔드: http://localhost:4000 (프론트에서 `/api`로 프록시됨), 헬스체크: `GET /health`
 
 ---
 
@@ -68,7 +75,7 @@ npm run dev
    - 백엔드를 배포하지 않고 로컬로 데모한다면 `VITE_API_BASE`를 로컬 백엔드가 접근 가능한 주소(터널링 등)로 설정
 4. Deploy
 
-백엔드(Express)는 Render/Railway 등에 배포하거나, 시간이 없으면 로컬에서 `npm run dev --prefix backend`로 띄우고 데모해도 무방합니다. 이 경우 백엔드 `.env`의 `FRONTEND_ORIGIN`에 배포된 프론트 도메인을 추가해야 CORS가 통과합니다.
+백엔드(FastAPI)는 Render/Railway 등에 배포하거나, 시간이 없으면 로컬에서 `uvicorn main:app --reload --port 4000`으로 띄우고 데모해도 무방합니다. 이 경우 백엔드 `.env`의 `FRONTEND_ORIGIN`에 배포된 프론트 도메인을 추가해야 CORS가 통과합니다.
 
 ---
 

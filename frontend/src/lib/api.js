@@ -9,7 +9,7 @@ export async function rewriteResume({ resume, jd, emphasis }) {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body.error || `요청이 실패했습니다 (${res.status})`)
+    throw new Error(body.detail || body.error || `요청이 실패했습니다 (${res.status})`)
   }
 
   return res.json()
