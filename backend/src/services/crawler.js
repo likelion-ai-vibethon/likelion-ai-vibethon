@@ -110,11 +110,14 @@ async function crawlWithPuppeteer(url) {
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    // Windows에서 백신 실시간 검사 등으로 Chrome 기동/CDP 응답이 느려지는
+    // 경우가 있어서 기본 protocolTimeout(30s)보다 넉넉하게 잡는다.
+    protocolTimeout: 60000,
   })
   try {
     const page = await browser.newPage()
     await page.setUserAgent(USER_AGENT)
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 })
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 20000 })
     const html = await page.content()
     return extractTextFromHtml(html)
   } finally {
