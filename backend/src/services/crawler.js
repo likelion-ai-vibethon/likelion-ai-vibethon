@@ -30,6 +30,48 @@ const SECTION_KEYWORDS = [
 // 최소 이 정도 길이는 되어야 "본문을 제대로 긁었다"고 판단한다.
 const MIN_TEXT_LENGTH = 200
 
+// 사람인 상세페이지 템플릿에서 실제 채용 요건 섹션이 끝나고 광고/추천공고/
+// 리뷰/AI 분석 등 본문과 무관한 내용이 시작되는 지점에 항상 등장하는 문구들.
+// DOM 구조(클래스명 등)는 페이지마다 달라도 이 문구들은 템플릿 공통이라
+// "본문이 끝나는 지점"을 잡아내는 데 구조보다 안정적이다.
+const STOP_MARKERS = [
+  '최저임금계산에 대한 알림',
+  '조회수',
+  'AI 서류 합격률',
+  '지원 예정자 통계',
+  '지원자 통계',
+  '경쟁력 분석',
+  '이런 상품은 어때요',
+  '관련 태그',
+  '이어보는 Ai매치',
+  '기업리뷰',
+  '면접후기',
+  '기업정보 전체보기',
+]
+
+// 키워드 지점부터 최대 이만큼만 남긴다 (STOP_MARKERS를 못 찾았을 때의 안전장치).
+const MAX_RELEVANT_WINDOW = 3000
+
+// 추출된 텍스트에서 "자격요건/우대사항 등 키워드가 처음 등장하는 지점"부터
+// "광고/추천공고 등 무관한 내용이 시작되는 지점"까지만 남긴다. DOM 구조를
+// 몰라도(=페이지마다 클래스명이 달라도) 동작하는 마지막 안전장치다.
+function trimToRelevantWindow(text) {
+  let start = -1
+  for (const kw of SECTION_KEYWORDS) {
+    const idx = text.indexOf(kw)
+    if (idx !== -1 && (start === -1 || idx < start)) start = idx
+  }
+  if (start === -1) return text.slice(0, MAX_RELEVANT_WINDOW)
+
+  let end = text.length
+  for (const marker of STOP_MARKERS) {
+    const idx = text.indexOf(marker, start)
+    if (idx !== -1 && idx < end) end = idx
+  }
+  end = Math.min(end, start + MAX_RELEVANT_WINDOW)
+  return text.slice(start, end).trim()
+}
+
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
@@ -48,6 +90,11 @@ const CANDIDATE_SELECTORS = [
 function extractTextFromHtml(html) {
   const $ = cheerio.load(html)
 
+  // script/style/noscript 안의 내용은 cheerio가 그냥 텍스트로 취급해서
+  // .text()에 그대로 딸려 나온다 (브라우저처럼 알아서 숨겨주지 않음).
+  // JS 소스코드가 본문에 섞이는 걸 막기 위해 먼저 통째로 제거한다.
+  $('script, style, noscript, iframe').remove()
+
   let blocks = []
   for (const selector of CANDIDATE_SELECTORS) {
     $(selector).each((_, el) => {
@@ -58,7 +105,14 @@ function extractTextFromHtml(html) {
 
   // 후보 셀렉터로 못 찾았으면 페이지 전체에서 문단 단위(p, li, div, td, span)로 훑는다.
   if (blocks.length === 0) {
-    $('p, li, div, td, span').each((_, el) => {
+    const CONTAINER_TAGS = 'div, p, li, ul, ol, table, section, article, header, footer, nav'
+    $('p, li, div, td, span, dd, dt').each((_, el) => {
+      // 자식으로 블록 레벨 컨테이너(div/p/li/ul/ol/table 등)를 가진 요소는
+      // 하위 요소들의 텍스트가 전부 이어붙은 "덩어리"라서, 페이지 상단의
+      // 큰 wrapper div 하나가 페이지 전체 텍스트를 통째로 품는 등
+      // 중복/노이즈 폭증의 원인이 된다. 그런 컨테이너는 건너뛰고 실제
+      // 텍스트를 담고 있는 말단(leaf) 요소만 수집한다.
+      if ($(el).children(CONTAINER_TAGS).length > 0) return
       const text = $(el).text().trim()
       if (text && text.length > 10) blocks.push(text)
     })
@@ -81,7 +135,9 @@ function extractTextFromHtml(html) {
     }
   }
 
-  return uniqueLines.join('\n')
+  // 어떤 방식으로 모았든(후보 셀렉터/leaf 훑기), 광고·추천공고·리뷰 등
+  // 무관한 내용이 섞여 있을 수 있으니 마지막으로 한 번 더 관련 구간만 자른다.
+  return trimToRelevantWindow(uniqueLines.join('\n'))
 }
 
 async function crawlWithFetch(url) {
@@ -105,11 +161,18 @@ async function crawlWithPuppeteer(url) {
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    // Windows에서 백신 실시간 검사 등으로 Chrome 기동/CDP 응답이 느려지는
+    // 경우가 있어서 기본 protocolTimeout(30s)보다 넉넉하게 잡는다.
+    protocolTimeout: 60000,
+    // 기본값(웹소켓)은 로컬 포트를 열어야 해서 방화벽/백신이 loopback
+    // 트래픽을 막는 환경에서 CDP 통신 자체가 안 될 수 있다. pipe(stdio)
+    // 방식은 포트를 안 열고 프로세스 파이프로만 통신해서 이 문제를 우회한다.
+    pipe: true,
   })
   try {
     const page = await browser.newPage()
     await page.setUserAgent(USER_AGENT)
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 })
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 20000 })
     const html = await page.content()
     return extractTextFromHtml(html)
   } finally {
