@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { rewriteResume, type RewriteResult } from "./lib/api";
 
 type Screen = "list" | "input" | "loading" | "result" | "saved";
 
@@ -7,16 +8,6 @@ interface ResumeData {
   jobDescription: string;
   experience: string;
 }
-
-const MOCK_KEYWORDS = ["프론트엔드", "React", "TypeScript", "UI/UX", "협업", "애자일", "성과 중심", "커뮤니케이션"];
-const MOCK_COMPETENCIES = ["기술적 역량: React, TypeScript, Next.js 실무 경험", "협업 역량: 애자일 팀 환경에서의 개발 경험", "문제 해결: 복잡한 UI 문제를 독립적으로 해결한 경험"];
-const MOCK_AFTER = `저는 3년간의 프론트엔드 개발 경험을 바탕으로 카카오에서 요구하는 React 및 TypeScript 기반의 고품질 UI를 구현해왔습니다.
-
-특히 대규모 트래픽 환경에서 성능 최적화를 통해 페이지 로딩 속도를 40% 단축한 경험이 있으며, 이는 귀사가 강조하는 '성과 중심' 문화와 부합합니다.
-
-애자일 팀에서 5명 이상의 개발자, 디자이너와 긴밀히 협업하여 3개의 서비스를 성공적으로 런칭했으며, 사용자 리텐션 25% 향상에 기여했습니다.
-
-귀사의 사용자 중심 서비스 철학에 공감하며, 뛰어난 사용자 경험을 만드는 데 기여하고 싶습니다.`;
 
 function Sidebar({ current, onNavigate }: { current: Screen; onNavigate: (s: Screen) => void }) {
   const items = [
@@ -151,18 +142,13 @@ function Screen1List({ onNavigate }: { onNavigate: (s: Screen) => void }) {
   );
 }
 
-function Screen2Input({ onNavigate, data, setData }: {
+function Screen2Input({ onNavigate, data, setData, onSubmit }: {
   onNavigate: (s: Screen) => void;
   data: ResumeData;
   setData: (d: ResumeData) => void;
+  onSubmit: () => void;
 }) {
   const canSubmit = data.coverLetter.trim() && data.jobDescription.trim();
-
-  function handleSubmit() {
-    if (!canSubmit) return;
-    onNavigate("loading");
-    setTimeout(() => onNavigate("result"), 3000);
-  }
 
   return (
     <div className="flex-1 bg-gray-50 overflow-y-auto">
@@ -230,7 +216,7 @@ function Screen2Input({ onNavigate, data, setData }: {
               취소
             </button>
             <button
-              onClick={handleSubmit}
+              onClick={onSubmit}
               disabled={!canSubmit}
               className={`flex-1 py-3 text-sm font-semibold rounded-xl transition-all ${
                 canSubmit
@@ -247,15 +233,15 @@ function Screen2Input({ onNavigate, data, setData }: {
   );
 }
 
-function Screen5Loading({ onNavigate, failed, setFailed }: {
+function Screen5Loading({ onNavigate, errorMessage, onRetry }: {
   onNavigate: (s: Screen) => void;
-  failed: boolean;
-  setFailed: (b: boolean) => void;
+  errorMessage: string | null;
+  onRetry: () => void;
 }) {
   return (
     <div className="flex-1 bg-gray-50 flex items-center justify-center">
       <div className="text-center max-w-sm mx-auto px-8">
-        {!failed ? (
+        {!errorMessage ? (
           <>
             <div className="relative w-20 h-20 mx-auto mb-6">
               <div className="absolute inset-0 rounded-full border-4 border-indigo-100" />
@@ -277,12 +263,6 @@ function Screen5Loading({ onNavigate, failed, setFailed }: {
                 </div>
               ))}
             </div>
-            <button
-              onClick={() => setFailed(true)}
-              className="mt-8 text-xs text-gray-300 hover:text-gray-400 underline transition-colors"
-            >
-              실패 상태 미리보기
-            </button>
           </>
         ) : (
           <>
@@ -290,15 +270,10 @@ function Screen5Loading({ onNavigate, failed, setFailed }: {
               ⚠️
             </div>
             <h2 className="text-lg font-bold text-gray-900 mb-2">AI 첨삭에 실패했습니다</h2>
-            <p className="text-sm text-gray-500 leading-relaxed">
-              일시적인 오류가 발생했습니다.<br />잠시 후 다시 시도해주세요.
-            </p>
+            <p className="text-sm text-gray-500 leading-relaxed">{errorMessage}</p>
             <div className="mt-6 space-y-3">
               <button
-                onClick={() => {
-                  setFailed(false);
-                  setTimeout(() => onNavigate("result"), 3000);
-                }}
+                onClick={onRetry}
                 className="w-full py-3 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-colors"
               >
                 다시 시도하기
@@ -317,8 +292,16 @@ function Screen5Loading({ onNavigate, failed, setFailed }: {
   );
 }
 
-function Screen3Result({ onNavigate, data }: { onNavigate: (s: Screen) => void; data: ResumeData }) {
-  const [afterText, setAfterText] = useState(MOCK_AFTER);
+function Screen3Result({ onNavigate, data, result }: {
+  onNavigate: (s: Screen) => void;
+  data: ResumeData;
+  result: RewriteResult;
+}) {
+  const [afterText, setAfterText] = useState(result.after);
+
+  useEffect(() => {
+    setAfterText(result.after);
+  }, [result.after]);
 
   return (
     <div className="flex-1 bg-gray-50 overflow-y-auto">
@@ -343,7 +326,7 @@ function Screen3Result({ onNavigate, data }: { onNavigate: (s: Screen) => void; 
           <div className="col-span-2 bg-white rounded-2xl border border-gray-100 p-5">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">JD 핵심 키워드</p>
             <div className="flex flex-wrap gap-2">
-              {MOCK_KEYWORDS.map((kw) => (
+              {result.keywords.map((kw) => (
                 <span key={kw} className="text-xs font-medium px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-full">
                   {kw}
                 </span>
@@ -351,28 +334,34 @@ function Screen3Result({ onNavigate, data }: { onNavigate: (s: Screen) => void; 
             </div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">매칭 점수</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">반영된 키워드</p>
             <div className="flex items-end gap-1">
-              <span className="text-4xl font-bold text-indigo-600">87</span>
-              <span className="text-lg text-gray-400 mb-1">/ 100</span>
-            </div>
-            <div className="mt-2 h-2 bg-gray-100 rounded-full">
-              <div className="h-2 bg-gradient-to-r from-indigo-400 to-violet-500 rounded-full w-[87%]" />
+              <span className="text-4xl font-bold text-indigo-600">{result.keywords.length}</span>
+              <span className="text-lg text-gray-400 mb-1">개</span>
             </div>
           </div>
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">요구 역량 분석</p>
-          <div className="space-y-2">
-            {MOCK_COMPETENCIES.map((c) => (
-              <div key={c} className="flex items-start gap-2 text-sm text-gray-700">
-                <span className="text-indigo-400 mt-0.5">✓</span>
-                {c}
-              </div>
-            ))}
-          </div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">요구 인재상 분석</p>
+          <p className="text-sm text-gray-700 leading-relaxed">{result.talent_profile}</p>
         </div>
+
+        {result.mapping.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">키워드별 반영 내용</p>
+            <div className="space-y-2">
+              {result.mapping.map((m) => (
+                <div key={m.keyword} className="flex items-start gap-2 text-sm text-gray-700">
+                  <span className="text-xs font-medium px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full shrink-0">
+                    {m.keyword}
+                  </span>
+                  <span className="text-gray-600">{m.changed}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {data.experience && (
           <div className="bg-violet-50 border border-violet-100 rounded-2xl p-4 mb-6">
@@ -446,16 +435,6 @@ function Screen4Saved({ onNavigate }: { onNavigate: (s: Screen) => void }) {
             </div>
             <span className="ml-auto text-xs font-medium px-2.5 py-1 bg-violet-100 text-violet-600 rounded-full">AI 맞춤</span>
           </div>
-          <div className="mt-4 pt-4 border-t border-gray-50 grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-xs text-gray-400 mb-0.5">매칭 점수</p>
-              <p className="text-sm font-bold text-indigo-600">87점</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400 mb-0.5">키워드 반영</p>
-              <p className="text-sm font-bold text-gray-800">8개</p>
-            </div>
-          </div>
         </div>
 
         <div className="space-y-3">
@@ -479,7 +458,8 @@ function Screen4Saved({ onNavigate }: { onNavigate: (s: Screen) => void }) {
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("list");
-  const [failed, setFailed] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [result, setResult] = useState<RewriteResult | null>(null);
   const [resumeData, setResumeData] = useState<ResumeData>({
     coverLetter: "",
     jobDescription: "",
@@ -487,8 +467,28 @@ export default function App() {
   });
 
   function navigate(s: Screen) {
-    if (s !== "loading") setFailed(false);
+    if (s !== "loading") setErrorMessage(null);
     setScreen(s);
+  }
+
+  async function runAnalysis() {
+    setErrorMessage(null);
+    setScreen("loading");
+    try {
+      const apiResult = await rewriteResume({
+        resume: resumeData.coverLetter,
+        jd: resumeData.jobDescription,
+        highlight: resumeData.experience || undefined,
+      });
+      setResult(apiResult);
+      setScreen("result");
+    } catch (err) {
+      if (err instanceof TypeError) {
+        setErrorMessage("서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.");
+      } else {
+        setErrorMessage(err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.");
+      }
+    }
   }
 
   return (
@@ -497,12 +497,14 @@ export default function App() {
 
       {screen === "list" && <Screen1List onNavigate={navigate} />}
       {screen === "input" && (
-        <Screen2Input onNavigate={navigate} data={resumeData} setData={setResumeData} />
+        <Screen2Input onNavigate={navigate} data={resumeData} setData={setResumeData} onSubmit={runAnalysis} />
       )}
       {screen === "loading" && (
-        <Screen5Loading onNavigate={navigate} failed={failed} setFailed={setFailed} />
+        <Screen5Loading onNavigate={navigate} errorMessage={errorMessage} onRetry={runAnalysis} />
       )}
-      {screen === "result" && <Screen3Result onNavigate={navigate} data={resumeData} />}
+      {screen === "result" && result && (
+        <Screen3Result onNavigate={navigate} data={resumeData} result={result} />
+      )}
       {screen === "saved" && <Screen4Saved onNavigate={navigate} />}
     </div>
   );
