@@ -478,7 +478,7 @@ export default function App() {
       const apiResult = await rewriteResume({
         resume: resumeData.coverLetter,
         jd: resumeData.jobDescription,
-        highlight: resumeData.experience || undefined,
+        emphasis: resumeData.experience || undefined,
       });
       setResult(apiResult);
       setScreen("result");

@@ -15,7 +15,7 @@ export interface RewriteResult {
 export async function rewriteResume(params: {
   resume: string;
   jd: string;
-  highlight?: string;
+  emphasis?: string;
 }): Promise<RewriteResult> {
   const res = await fetch(`${API_BASE}/api/rewrite`, {
     method: "POST",
