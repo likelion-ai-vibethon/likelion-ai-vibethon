@@ -31,11 +31,32 @@
 
 ## 🛠 기술 스택 (Tech Stack)
 
-- **Frontend:** HTML5, CSS3, JavaScript (or React)
-- **AI Engine:** Claude API / OpenAI API
+- **Frontend:** React + Vite (`frontend/`)
+- **Backend:** Node.js + Express (`backend/`) — Gemini API 키를 서버에서만 보관하는 프록시 역할
+- **AI Engine:** Google Gemini API (무료 티어)
 - **Storage:** LocalStorage (빠르고 효율적인 MVP 시연용 데이터 관리)
 - **Deployment:** Vercel
 - **AI Assist Tools:** Claude Code, Cursor 등
+
+---
+
+## 🚀 실행 방법 (Getting Started)
+
+```bash
+# 1. 의존성 설치 (루트에서 한 번에)
+npm install
+npm run install:all
+
+# 2. 백엔드 환경변수 설정
+cp backend/.env.example backend/.env
+# backend/.env 에 GEMINI_API_KEY 값 채우기 (https://aistudio.google.com/apikey 에서 발급)
+
+# 3. 프론트 + 백엔드 동시 실행
+npm run dev
+```
+
+- 프론트엔드: http://localhost:5173
+- 백엔드: http://localhost:4000 (프론트에서 `/api`로 프록시됨)
 
 ---
 
