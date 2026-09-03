@@ -63,7 +63,14 @@ function extractTextFromHtml(html) {
 
   // 후보 셀렉터로 못 찾았으면 페이지 전체에서 문단 단위(p, li, div, td, span)로 훑는다.
   if (blocks.length === 0) {
-    $('p, li, div, td, span').each((_, el) => {
+    const CONTAINER_TAGS = 'div, p, li, ul, ol, table, section, article, header, footer, nav'
+    $('p, li, div, td, span, dd, dt').each((_, el) => {
+      // 자식으로 블록 레벨 컨테이너(div/p/li/ul/ol/table 등)를 가진 요소는
+      // 하위 요소들의 텍스트가 전부 이어붙은 "덩어리"라서, 페이지 상단의
+      // 큰 wrapper div 하나가 페이지 전체 텍스트를 통째로 품는 등
+      // 중복/노이즈 폭증의 원인이 된다. 그런 컨테이너는 건너뛰고 실제
+      // 텍스트를 담고 있는 말단(leaf) 요소만 수집한다.
+      if ($(el).children(CONTAINER_TAGS).length > 0) return
       const text = $(el).text().trim()
       if (text && text.length > 10) blocks.push(text)
     })
