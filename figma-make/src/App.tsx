@@ -22,10 +22,10 @@ function Sidebar({ current, onNavigate }: { current: Screen; onNavigate: (s: Scr
       <div className="px-5 py-5 border-b border-gray-100">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-            <span className="text-white text-xs font-bold">JF</span>
+            <span className="text-white text-xs font-bold">FB</span>
           </div>
           <div>
-            <p className="text-sm font-bold text-gray-900">JobFit</p>
+            <p className="text-sm font-bold text-gray-900">FitBack</p>
             <p className="text-xs text-gray-400">AI 이력서 맞춤 서비스</p>
           </div>
         </div>
