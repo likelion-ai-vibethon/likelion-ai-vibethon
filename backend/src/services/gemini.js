@@ -15,6 +15,44 @@ function stripCodeFence(text) {
   return t
 }
 
+const SCORE_LIMITS = {
+  keyword_alignment: 40,
+  evidence_quality: 25,
+  job_relevance: 20,
+  writing_quality: 10,
+  company_consistency: 5,
+}
+
+function toBoundedInteger(value, max) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return 0
+  return Math.min(max, Math.max(0, Math.round(number)))
+}
+
+function normalizeRewriteResult(result, resume) {
+  const after = typeof result?.after === 'string' && result.after.trim()
+    ? result.after.trim()
+    : resume
+  const rawBreakdown = result?.score_breakdown ?? {}
+  const scoreBreakdown = Object.fromEntries(
+    Object.entries(SCORE_LIMITS).map(([key, max]) => [
+      key,
+      toBoundedInteger(rawBreakdown[key], max),
+    ]),
+  )
+  const scoreSubtotal = Object.values(scoreBreakdown).reduce((sum, score) => sum + score, 0)
+  const afterLength = after.replace(/\s/g, '').length
+  const lengthPenalty = afterLength < 300 ? 10 : 0
+
+  return {
+    ...result,
+    after,
+    score_breakdown: scoreBreakdown,
+    length_penalty: lengthPenalty,
+    match_score: Math.max(0, scoreSubtotal - lengthPenalty),
+  }
+}
+
 async function callGemini(prompt) {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
@@ -59,17 +97,17 @@ export async function rewriteResume({ resume, jd, highlight }) {
   let rawText = ''
   try {
     rawText = await callGemini(prompt)
-    return JSON.parse(rawText)
+    return normalizeRewriteResult(JSON.parse(rawText), resume)
   } catch {
     try {
-      return JSON.parse(stripCodeFence(rawText))
+      return normalizeRewriteResult(JSON.parse(stripCodeFence(rawText)), resume)
     } catch {
-      return {
+      return normalizeRewriteResult({
         keywords: [],
         talent_profile: '',
         after: resume,
         mapping: [],
-      }
+      }, resume)
     }
   }
 }
