@@ -1,26 +1,25 @@
+import { SYSTEM_PROMPT, buildPrompt } from '../prompts.js'
+
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
 
-export async function analyzeAndRewrite({ resume, jd }) {
+function stripCodeFence(text) {
+  let t = text.trim()
+  if (t.startsWith('```')) {
+    const lines = t.split('\n')
+    lines.shift() // 첫 줄 ``` 또는 ```json 제거
+    if (lines.length && lines[lines.length - 1].trim().startsWith('```')) {
+      lines.pop()
+    }
+    t = lines.join('\n').trim()
+  }
+  return t
+}
+
+async function callGemini(prompt) {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY가 설정되지 않았습니다. backend/.env를 확인하세요.')
   }
-
-  const prompt = `당신은 채용 자기소개서 첨삭 전문가입니다.
-아래 채용공고(JD)를 분석해 핵심 키워드와 인재상을 추출하고,
-자기소개서 원문을 해당 회사에 맞게 재구성하세요.
-
-[채용공고]
-${jd}
-
-[자기소개서 원문]
-${resume}
-
-다음 JSON 형식으로만 응답하세요:
-{
-  "keywords": ["키워드1", "키워드2"],
-  "rewritten": "재구성된 자기소개서 전체 텍스트"
-}`
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`
 
@@ -28,6 +27,7 @@ ${resume}
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json' },
     }),
@@ -40,10 +40,36 @@ ${resume}
 
   const data = await res.json()
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
-
   if (!text) {
     throw new Error('Gemini 응답에서 텍스트를 찾을 수 없습니다.')
   }
+  return text
+}
 
-  return JSON.parse(text)
+/**
+ * resume/jd/highlight를 받아 Gemini를 호출하고 결과를 파싱해서 리턴한다.
+ *
+ * JSON 파싱 실패 시 백틱(코드펜스)을 벗기고 한 번 더 시도하고, 그래도
+ * 실패하면 after에 원문 자소서를 그대로 넣은 결과를 리턴한다 (호출부에서
+ * 항상 200으로 응답하기 위함).
+ */
+export async function rewriteResume({ resume, jd, highlight }) {
+  const prompt = buildPrompt(resume, jd, highlight)
+
+  let rawText = ''
+  try {
+    rawText = await callGemini(prompt)
+    return JSON.parse(rawText)
+  } catch {
+    try {
+      return JSON.parse(stripCodeFence(rawText))
+    } catch {
+      return {
+        keywords: [],
+        talent_profile: '',
+        after: resume,
+        mapping: [],
+      }
+    }
+  }
 }
