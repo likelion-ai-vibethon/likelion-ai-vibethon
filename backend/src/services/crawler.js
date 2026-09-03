@@ -48,6 +48,11 @@ const CANDIDATE_SELECTORS = [
 function extractTextFromHtml(html) {
   const $ = cheerio.load(html)
 
+  // script/style/noscript 안의 내용은 cheerio가 그냥 텍스트로 취급해서
+  // .text()에 그대로 딸려 나온다 (브라우저처럼 알아서 숨겨주지 않음).
+  // JS 소스코드가 본문에 섞이는 걸 막기 위해 먼저 통째로 제거한다.
+  $('script, style, noscript, iframe').remove()
+
   let blocks = []
   for (const selector of CANDIDATE_SELECTORS) {
     $(selector).each((_, el) => {
