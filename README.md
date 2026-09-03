@@ -30,7 +30,7 @@
 ## 🛠 기술 스택 (Tech Stack)
 
 - **Frontend:** React + Vite (`frontend/`)
-- **Backend:** Python + FastAPI (`backend/`) — Gemini API 키를 서버에서만 보관하는 프록시 역할
+- **Backend:** Node.js + Express (`backend/`) — Gemini API 키를 서버에서만 보관하는 프록시 역할, 채용공고(URL) 크롤링 지원
 - **AI Engine:** Google Gemini API (무료 티어, `google-genai` SDK)
 - **Storage:** 없음 — 상태는 프론트 React state로만 관리 (오늘 MVP 범위)
 - **Deployment:** 프론트엔드는 Vercel, 백엔드는 별도 배포 또는 로컬 실행
@@ -40,19 +40,19 @@
 
 ## 🚀 실행 방법 (Getting Started)
 
-**터미널 1 — 백엔드 (FastAPI)**
+**터미널 1 — 백엔드 (Node.js + Express)**
 
 ```bash
 cd backend
-python -m venv .venv
-.venv\Scripts\activate        # macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt
+npm install
 
 cp .env.example .env
 # .env 에 GEMINI_API_KEY 값 채우기 (https://aistudio.google.com/apikey 에서 발급)
 
-uvicorn main:app --reload --port 4000
+npm run dev   # 파일 변경 감지 없이 바로 실행하려면: npm start
 ```
+
+- `.env`의 `MOCK=true`로 설정하면 크롤링/AI 호출 없이 하드코딩된 예시 응답을 즉시 반환합니다 (데모 중 장애 대비용).
 
 **터미널 2 — 프론트엔드 (Vite)**
 
@@ -75,7 +75,7 @@ npm run dev
    - 백엔드를 배포하지 않고 로컬로 데모한다면 `VITE_API_BASE`를 로컬 백엔드가 접근 가능한 주소(터널링 등)로 설정
 4. Deploy
 
-백엔드(FastAPI)는 Render/Railway 등에 배포하거나, 시간이 없으면 로컬에서 `uvicorn main:app --reload --port 4000`으로 띄우고 데모해도 무방합니다. 이 경우 백엔드 `.env`의 `FRONTEND_ORIGIN`에 배포된 프론트 도메인을 추가해야 CORS가 통과합니다.
+백엔드(Node/Express)는 Render/Railway 등에 배포하거나, 시간이 없으면 로컬에서 `npm start`(포트는 `.env`의 `PORT`, 기본 4000)로 띄우고 데모해도 무방합니다.
 
 ---
 
@@ -97,10 +97,36 @@ npm run dev
 
 ```json
 // Request
-{ "resume": "자소서 원문", "jd": "채용공고 텍스트", "emphasis": "강조하고 싶은 경험 (선택)" }
+{ "resume": "자소서 원문", "jd": "채용공고 텍스트", "highlight": "강조하고 싶은 경험 (선택)" }
 
 // Response
-{ "keywords": ["키워드1", "키워드2"], "draft": "재구성된 자소서 전체 텍스트" }
+{
+  "keywords": ["키워드1", "키워드2"],
+  "talent_profile": "JD에서 확인되는 인재상 요약",
+  "after": "재구성된 자소서 전체 텍스트",
+  "mapping": [{ "keyword": "키워드1", "changed": "반영된 내용 설명" }],
+  "match_score": 0,
+  "score_breakdown": {
+    "keyword_alignment": 0,
+    "evidence_quality": 0,
+    "job_relevance": 0,
+    "writing_quality": 0,
+    "company_consistency": 0
+  },
+  "length_penalty": 0
+}
+```
+
+AI 호출/파싱이 끝내 실패하면 `502`와 `{ "error": "..." }`를 응답합니다.
+
+**`POST /api/crawl`**
+
+```json
+// Request
+{ "url": "사람인 채용공고 상세페이지 URL" }
+
+// Response
+{ "jd_text": "크롤링한 채용공고 본문", "success": true }
 ```
 
 ---
