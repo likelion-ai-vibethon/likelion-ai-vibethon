@@ -52,16 +52,34 @@ const STOP_MARKERS = [
 // 키워드 지점부터 최대 이만큼만 남긴다 (STOP_MARKERS를 못 찾았을 때의 안전장치).
 const MAX_RELEVANT_WINDOW = 3000
 
-// 추출된 텍스트에서 "자격요건/우대사항 등 키워드가 처음 등장하는 지점"부터
-// "광고/추천공고 등 무관한 내용이 시작되는 지점"까지만 남긴다. DOM 구조를
-// 몰라도(=페이지마다 클래스명이 달라도) 동작하는 마지막 안전장치다.
+// 실제 섹션 제목 줄인지 판단한다. "자격요건" 같은 키워드는 "3년 이상의
+// 자격요건을 갖춘..." 같은 일반 문장이나 "인재상과 비교 분석 받아보세요!"
+// 같은 프로모션 문구에도 그냥 포함될 수 있어서, 단순 포함 여부만으로는
+// "진짜 섹션 제목"과 "본문 중간에 등장한 단어"를 구분하지 못한다. 실제
+// 섹션 제목 줄은 "담당업무", "[자격요건]"처럼 그 줄이 사실상 키워드
+// 하나로만 이루어져 있으므로, 줄 길이가 키워드 길이보다 크게 길지 않은
+// 경우에만 "제목 줄"로 인정한다.
+const HEADING_SLACK = 10
+
+function isHeadingLine(line) {
+  return SECTION_KEYWORDS.some((kw) => line.includes(kw) && line.length <= kw.length + HEADING_SLACK)
+}
+
+// 추출된 텍스트에서 "담당업무/자격요건/우대사항 등 섹션 제목 줄이 처음
+// 등장하는 지점"부터 "광고/추천공고 등 무관한 내용이 시작되는 지점"까지만
+// 남긴다. DOM 구조를 몰라도(=페이지마다 클래스명이 달라도) 동작하는
+// 마지막 안전장치다.
+//
+// 섹션 제목 줄을 하나도 못 찾았다면(마감된 공고, 상세요강이 이미지인 공고
+// 등) 앞부분을 무작정 잘라 반환하지 않는다 - 그 부분은 대개 지도/접수기간/
+// 조회수 같은 채용요건과 무관한 내용이라, 실패로 처리하는 편이 "그럴듯해
+// 보이지만 실제로는 엉뚱한 내용"을 성공으로 잘못 응답하는 것보다 낫다.
 function trimToRelevantWindow(text) {
-  let start = -1
-  for (const kw of SECTION_KEYWORDS) {
-    const idx = text.indexOf(kw)
-    if (idx !== -1 && (start === -1 || idx < start)) start = idx
-  }
-  if (start === -1) return text.slice(0, MAX_RELEVANT_WINDOW)
+  const lines = text.split('\n')
+  const startLineIdx = lines.findIndex(isHeadingLine)
+  if (startLineIdx === -1) return ''
+
+  const start = lines.slice(0, startLineIdx).join('\n').length + (startLineIdx > 0 ? 1 : 0)
 
   let end = text.length
   for (const marker of STOP_MARKERS) {
@@ -180,6 +198,26 @@ async function crawlWithPuppeteer(url) {
   }
 }
 
+// "relay/view" 링크는 지원 버튼 클릭을 추적하기 위한 리다이렉트용
+// URL이라 원래 클릭 시 함께 전달되던 세션/추천 파라미터 없이 단독으로
+// 접속하면 의도한 공고가 아닌 다른 공고(추천 공고 등)로 연결되는 경우가
+// 있다. rec_idx만 있으면 항상 같은 공고를 가리키는 정식 상세페이지
+// URL(zf_user/jobs/view)로 정규화해서 크롤링 대상을 안정적으로 고정한다.
+function normalizeSaraminUrl(url) {
+  try {
+    const parsed = new URL(url)
+    if (!parsed.hostname.endsWith('saramin.co.kr')) return url
+    if (!parsed.pathname.includes('/relay/view')) return url
+
+    const recIdx = parsed.searchParams.get('rec_idx')
+    if (!recIdx) return url
+
+    return `https://www.saramin.co.kr/zf_user/jobs/view?rec_idx=${recIdx}`
+  } catch {
+    return url
+  }
+}
+
 /**
  * 사람인 채용공고 URL에서 본문 텍스트를 최대한 긁어서 리턴한다.
  *
@@ -187,7 +225,9 @@ async function crawlWithPuppeteer(url) {
  * (headless Chrome)로 폴백한다. 완전히 실패하면 예외를 던진다 (호출부인
  * routes/crawl.js에서 잡아서 success: false로 응답한다).
  */
-export async function crawlSaramin(url) {
+export async function crawlSaramin(rawUrl) {
+  const url = normalizeSaraminUrl(rawUrl)
+
   let text = ''
   try {
     text = await crawlWithFetch(url)
@@ -199,8 +239,12 @@ export async function crawlSaramin(url) {
     text = await crawlWithPuppeteer(url)
   }
 
-  if (text.length < 20) {
-    throw new Error('채용공고 본문을 찾지 못했습니다.')
+  // Puppeteer까지 시도하고도 이 정도밖에 못 건졌다면, 채용요건 본문이
+  // 아니라 요약 카드 몇 줄 정도만 긁힌 것이다 (예: 상세요강이 이미지로
+  // 등록된 공고). 실제로는 실패인데 성공으로 응답하면 사용자가 눈치채기
+  // 어려우니, 이런 경우는 실패로 처리한다.
+  if (text.length < MIN_TEXT_LENGTH) {
+    throw new Error('채용공고 본문을 찾지 못했습니다. 상세요강이 이미지로 등록된 공고일 수 있습니다.')
   }
 
   return text
