@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { rewriteResume, type RewriteResult } from "./lib/api";
+import { crawlJob, rewriteResume, type CrawlResult, type RewriteResult } from "./lib/api";
 
-type Screen = "list" | "input" | "loading" | "result" | "saved";
+type Screen = "list" | "crawl" | "input" | "loading" | "result" | "saved";
 
 interface ResumeData {
   coverLetter: string;
@@ -12,6 +12,7 @@ interface ResumeData {
 function Sidebar({ current, onNavigate }: { current: Screen; onNavigate: (s: Screen) => void }) {
   const items = [
     { id: "list" as Screen, label: "이력서 목록", icon: "📄" },
+    { id: "crawl" as Screen, label: "채용공고 확인", icon: "🔍" },
     { id: "input" as Screen, label: "AI 맞춤 첨삭", icon: "✏️" },
     { id: "result" as Screen, label: "AI 분석 결과", icon: "🤖" },
     { id: "saved" as Screen, label: "저장 완료", icon: "✅" },
@@ -137,6 +138,103 @@ function Screen1List({ onNavigate }: { onNavigate: (s: Screen) => void }) {
           <p className="text-sm font-medium text-gray-600">새 이력서 추가</p>
           <p className="text-xs text-gray-400">기본 양식으로 시작하기</p>
         </button>
+      </div>
+    </div>
+  );
+}
+
+function ScreenCrawl({ onNavigate, onUseAsJD }: {
+  onNavigate: (s: Screen) => void;
+  onUseAsJD: (jdText: string) => void;
+}) {
+  const [url, setUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [result, setResult] = useState<CrawlResult | null>(null);
+
+  async function handleLoad() {
+    if (!url.trim()) return;
+    setLoading(true);
+    setErrorMessage(null);
+    setResult(null);
+    try {
+      const crawlResult = await crawlJob(url.trim());
+      if (!crawlResult.success || !crawlResult.jd_text.trim()) {
+        setErrorMessage("채용공고 본문을 가져오지 못했습니다. URL을 확인하거나 직접 붙여넣어 주세요.");
+      } else {
+        setResult(crawlResult);
+      }
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex-1 bg-gray-50 overflow-y-auto">
+      <div className="max-w-3xl mx-auto py-10 px-8">
+        <div className="mb-7">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-medium text-indigo-500 bg-indigo-50 px-2.5 py-0.5 rounded-full">채용공고 확인</span>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mt-2">채용공고 확인</h1>
+          <p className="text-gray-500 mt-1 text-sm">사람인 채용공고 URL을 불러와 본문을 확인할 수 있습니다.</p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-5">
+          <label className="block text-sm font-semibold text-gray-800 mb-1">채용공고 URL</label>
+          <p className="text-xs text-gray-400 mb-3">사람인(saramin.co.kr) 채용공고 상세페이지 URL을 붙여넣어 주세요.</p>
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://www.saramin.co.kr/zf_user/jobs/relay/view?..."
+              className="flex-1 text-sm text-gray-800 placeholder-gray-300 outline-none border border-gray-200 rounded-lg px-3 py-2.5"
+            />
+            <button
+              onClick={handleLoad}
+              disabled={!url.trim() || loading}
+              className={`px-5 py-2.5 text-sm font-semibold rounded-xl transition-all shrink-0 ${
+                url.trim() && !loading
+                  ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-100"
+                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+              {loading ? "불러오는 중..." : "불러오기"}
+            </button>
+          </div>
+        </div>
+
+        {errorMessage && (
+          <div className="bg-red-50 border border-red-100 rounded-2xl p-4 mb-5">
+            <p className="text-sm text-red-700">{errorMessage}</p>
+          </div>
+        )}
+
+        {result && (
+          <div className="bg-white rounded-2xl border border-gray-100 p-6">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-semibold text-gray-700">불러온 채용공고 본문</span>
+              <span className="text-xs text-gray-400">{result.jd_text.length}자</span>
+            </div>
+            <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-xl p-4 max-h-96 overflow-y-auto">
+              {result.jd_text}
+            </div>
+            <div className="flex justify-end mt-4">
+              <button
+                onClick={() => {
+                  onUseAsJD(result.jd_text);
+                  onNavigate("input");
+                }}
+                className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-colors shadow-sm"
+              >
+                이 공고로 AI 첨삭하기
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -496,6 +594,12 @@ export default function App() {
       <Sidebar current={screen === "loading" ? "input" : screen} onNavigate={navigate} />
 
       {screen === "list" && <Screen1List onNavigate={navigate} />}
+      {screen === "crawl" && (
+        <ScreenCrawl
+          onNavigate={navigate}
+          onUseAsJD={(jdText) => setResumeData((prev) => ({ ...prev, jobDescription: jdText }))}
+        />
+      )}
       {screen === "input" && (
         <Screen2Input onNavigate={navigate} data={resumeData} setData={setResumeData} onSubmit={runAnalysis} />
       )}

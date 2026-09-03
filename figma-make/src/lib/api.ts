@@ -30,3 +30,23 @@ export async function rewriteResume(params: {
 
   return res.json();
 }
+
+export interface CrawlResult {
+  jd_text: string;
+  success: boolean;
+}
+
+export async function crawlJob(url: string): Promise<CrawlResult> {
+  const res = await fetch(`${API_BASE}/api/crawl`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error || `채용공고를 불러오지 못했습니다. (HTTP ${res.status})`);
+  }
+
+  return res.json();
+}
