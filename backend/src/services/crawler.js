@@ -113,6 +113,10 @@ async function crawlWithPuppeteer(url) {
     // Windows에서 백신 실시간 검사 등으로 Chrome 기동/CDP 응답이 느려지는
     // 경우가 있어서 기본 protocolTimeout(30s)보다 넉넉하게 잡는다.
     protocolTimeout: 60000,
+    // 기본값(웹소켓)은 로컬 포트를 열어야 해서 방화벽/백신이 loopback
+    // 트래픽을 막는 환경에서 CDP 통신 자체가 안 될 수 있다. pipe(stdio)
+    // 방식은 포트를 안 열고 프로세스 파이프로만 통신해서 이 문제를 우회한다.
+    pipe: true,
   })
   try {
     const page = await browser.newPage()
